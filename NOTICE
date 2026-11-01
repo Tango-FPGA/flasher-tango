@@ -1,0 +1,37 @@
+Tango FPGA firmware installer (flasher-tango)
+
+This product includes software derived from bflb_flash_web, part of Bouffalo Lab's bouffalo_sdk:
+    https://github.com/bouffalolab/bouffalo_sdk, folder tools/bflb_flash_web,
+    commit 82efe4ef797e190880706f9cff1809b423e20847 (SDK release 2.3.37),
+    licensed under the Apache License, Version 2.0 (see LICENSE).
+The unmodified original files are in that commit of bouffalo_sdk, folder tools/bflb_flash_web.
+
+Files modified from that original:
+    index.html        rewritten user interface (English, two files with Sipeed / GitHub download buttons, BL616 only)
+    app.js            page logic for the two-file Tango install; SerialTransport kept, messages translated
+    loader.js         messages translated to English; no code change
+    protocol.js       messages translated to English; no code change
+    targets/bl616.js  messages translated to English; no code change
+    targets/index.js  registers the BL616 target only
+Unmodified copies of original files:
+    targets/common.js, targets/bl616/flash_para.bin
+Original files not included:
+    README.md, .gitignore, targets/bl602.js, targets/bl602/*, targets/bl616cl.js, targets/bl616cl/*
+Files added by Tango (not derived from bflb_flash_web):
+    tango.js
+    fonts/SairaCondensed-SemiBold.ttf, fonts/OFL.txt (a separate third-party component, below)
+
+Third-party component (not part of bflb_flash_web, not Apache-2.0):
+    fonts/SairaCondensed-SemiBold.ttf  Saira Condensed SemiBold, Copyright 2016 The Saira Project Authors,
+                                       with Reserved Font Name "Saira", licensed under the SIL Open Font
+                                       License 1.1 (OFL-1.1); licence text in fonts/OFL.txt.
+                                       Unmodified copy: 96,028 bytes, sha256
+                                       30f8ed4d078211003a9715c80c51ce031bab5c9a17e8771182e4c4599205634b
+    fonts/OFL.txt                      its licence, unmodified, sha256
+                                       0e2ccc5da1dd979f08ba82bca2fb61592506a1e58d3cbfc26d904f0db71bd812
+The font is used only for the "TangoFPGA" wordmark in the page header.
+
+Each modified file carries a notice saying it was modified from bflb_flash_web (Apache-2.0, section 4(b)).
+
+The changes and the added files are Copyright 2026 the Tango authors and are licensed under the
+Apache License, Version 2.0, the same licence as the original.
