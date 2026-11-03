@@ -58,6 +58,10 @@
     progressValue: document.querySelector("#progress-value"),
     log: document.querySelector("#log"),
     clearLogButton: document.querySelector("#clear-log"),
+    bootImageLink: document.querySelector("#boot-button-image-link"),
+    bootImageDialog: document.querySelector("#boot-image-dialog"),
+    bootImage: document.querySelector("#boot-image"),
+    bootImageClose: document.querySelector("#boot-image-close"),
   };
 
   let port = null;
@@ -674,7 +678,27 @@
     });
   }
 
+  /* The BOOT button picture opens in a modal <dialog>; without dialog support the link opens the file itself.
+     The picture is loaded on the first click only.  Esc (the dialog's own cancel), Close and a click on the
+     backdrop close it; focus returns to the link. */
+  function wireBootImage() {
+    const { bootImageLink: link, bootImageDialog: dialog, bootImage: image, bootImageClose: closeButton } = elements;
+    if (typeof dialog.showModal !== "function") return;
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (!image.getAttribute("src")) image.setAttribute("src", link.getAttribute("href"));
+      dialog.showModal();
+      closeButton.focus();
+    });
+    closeButton.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener("close", () => link.focus());
+  }
+
   function initialize() {
+    wireBootImage();
     if (!navigator.serial) {
       elements.supportNotice.hidden = false;
       elements.connectButton.disabled = true;

@@ -19,7 +19,7 @@ Original files not included:
     README.md, .gitignore, targets/bl602.js, targets/bl602/*, targets/bl616cl.js, targets/bl616cl/*
 Files added by Tango (not derived from bflb_flash_web):
     tango.js
-    images/boot-button.png  a rendering of Sipeed's Tang Console 3D model (Sipeed Download Station), annotated to show the BOOT button
+    images/boot-button.png  a rendering of Sipeed's Tang Console 3D model (Sipeed Download Station), annotated to show the BOOT button and the MCU USB-C port
     fonts/SairaCondensed-SemiBold.ttf, fonts/OFL.txt (a separate third-party component, below)
 
 Third-party component (not part of bflb_flash_web, not Apache-2.0):

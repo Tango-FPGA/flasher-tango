@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.dl.sipeed.com https://api.github.com https://raw.githubusercontent.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https://api.dl.sipeed.com https://api.github.com https://raw.githubusercontent.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light">
   <title>Firmware Installer</title>
@@ -167,6 +167,11 @@
     .log-success { color: #74d9a3; }
     .log-warn { color: #eac26a; }
     .log-error { color: #ff9182; }
+    .image-dialog { padding: 0; border: 0; border-radius: 8px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; background: #fff; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+    .image-dialog::backdrop { background: rgba(10, 16, 13, 0.72); }
+    .image-dialog-body { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; }
+    .image-dialog-body img { display: block; width: min(678px, calc(100vw - 64px), calc((100vh - 124px) * 678 / 563)); height: auto; aspect-ratio: 678 / 563; }
+    .image-dialog-body .button { align-self: flex-end; }
     @media (max-width: 760px) {
       .topbar { padding: 10px 16px; flex-wrap: wrap; }
       .chip-label { display: none; }
@@ -344,6 +349,13 @@
       </section>
     </div>
   </main>
+
+  <dialog id="boot-image-dialog" class="image-dialog" aria-label="Where the BOOT button is">
+    <div class="image-dialog-body">
+      <img id="boot-image" alt="The underside of the board: the BOOT button, next to the MCU USB-C port, is marked with an arrow" width="678" height="563">
+      <button id="boot-image-close" class="button" type="button">Close</button>
+    </div>
+  </dialog>
 
   <script src="protocol.js"></script>
   <script src="targets/common.js"></script>
