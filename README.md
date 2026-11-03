@@ -1,6 +1,6 @@
 # flasher-tango -- the Tango FPGA firmware installer
 
-**Version 2026-11-03** (date code `20261103`)
+**Version 2026-11-03** (date code `20261103-2`)
 
 flasher-tango is a web page that installs the **Tango FPGA** firmware on the **BL616** microcontroller of the
 **Sipeed Tang Console 138K**. It runs in Chrome or Edge on a desktop or laptop computer and talks to the board over

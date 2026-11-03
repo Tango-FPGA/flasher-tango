@@ -17,6 +17,8 @@
       src: url("fonts/SairaCondensed-SemiBold.ttf") format("truetype");
     }
     :root {
+      --tango-orange: #f2c04f;
+      --tango-ink: #163f31;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: #17211b;
       background: #f3f5f1;
@@ -45,8 +47,8 @@
       place-items: center;
       height: 32px;
       padding: 0 10px;
-      color: #163f31;
-      background: #f2c04f;
+      color: var(--tango-ink);
+      background: var(--tango-orange);
       border-radius: 6px;
       font-family: "Saira Condensed", sans-serif;
       font-weight: 600;
@@ -59,7 +61,7 @@
     .status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #9cac9f; flex: 0 0 auto; }
     .status-dot[data-status="connected"] { background: #67d29a; }
-    .status-dot[data-status="working"] { background: #f2c04f; box-shadow: 0 0 0 4px #f2c04f33; }
+    .status-dot[data-status="working"] { background: var(--tango-orange); box-shadow: 0 0 0 4px color-mix(in srgb, var(--tango-orange) 20%, transparent); }
     .status-dot[data-status="success"] { background: #67d29a; }
     .status-dot[data-status="error"] { background: #ff7e6c; }
     main { width: min(1080px, calc(100% - 32px)); margin: 28px auto 44px; }
@@ -72,6 +74,7 @@
     }
     .notice-error { color: #7a281f; background: #fff0ed; border: 1px solid #edb9b1; }
     .notice-info { color: #26352d; background: #fff; border: 1px solid #d7ddd7; }
+    .notice-lead { margin: 0 0 6px; }
     .workspace { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); gap: 20px; }
     .panel { background: #fff; border: 1px solid #d7ddd7; border-radius: 8px; }
     .panel-body { padding: 22px; }
@@ -133,8 +136,9 @@
     .actions { display: flex; gap: 10px; margin-top: 18px; }
     .button { min-height: 42px; padding: 0 16px; border: 1px solid #b8c1ba; border-radius: 6px; color: #26352d; background: #fff; font-weight: 700; font-size: 13px; }
     .button:hover:not(:disabled) { background: #f3f6f3; }
-    .button-primary { flex: 1; color: #fff; border-color: #1d6346; background: #237452; }
-    .button-primary:hover:not(:disabled) { background: #1d6346; }
+    .button-primary { flex: 1; color: var(--tango-ink); border-color: color-mix(in srgb, var(--tango-orange) 80%, var(--tango-ink)); background: var(--tango-orange); }
+    .button-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--tango-orange) 88%, var(--tango-ink)); }
+    .button-primary:focus-visible { outline: 2px solid var(--tango-ink); outline-offset: 2px; }
     .button-danger { color: #8c2e24; border-color: #dcaaa4; }
     .serial-actions { display: flex; gap: 10px; }
     .serial-actions .button { flex: 1; }
@@ -144,8 +148,8 @@
     .progress-value { color: #237452; font: 700 12px/1 ui-monospace, monospace; }
     progress { display: block; width: 100%; height: 8px; overflow: hidden; border: 0; border-radius: 4px; background: #e4e9e5; }
     progress::-webkit-progress-bar { background: #e4e9e5; }
-    progress::-webkit-progress-value { background: #237452; transition: width .12s; }
-    progress::-moz-progress-bar { background: #237452; }
+    progress::-webkit-progress-value { background: var(--tango-orange); transition: width .12s; }
+    progress::-moz-progress-bar { background: var(--tango-orange); }
     .not-ready { margin: 10px 0 0; padding-left: 18px; color: #6e7972; font-size: 12px; line-height: 1.6; }
     .manual { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e2e6e2; }
     .manual summary { color: #3f4e45; cursor: pointer; font-size: 13px; font-weight: 700; }
@@ -204,6 +208,7 @@
     </div>
 
     <div class="notice notice-info">
+      <p id="browser-requirement" class="notice-lead">This page must be run in Chrome or Edge.</p>
       <strong>Your files stay on this computer.</strong> The files you choose are read and joined in this browser and
       sent only to the board over USB. If you click <strong>Get it from Sipeed for me</strong>, your browser downloads
       that one file from Sipeed's server. If you click <strong>Get it from GitHub for me</strong>, your browser asks
@@ -331,7 +336,7 @@
           <ul id="not-ready" class="not-ready" aria-live="polite"></ul>
 
           <details class="manual">
-            <summary>The board does not show up, or does not answer</summary>
+            <summary>Troubleshooting: The board does not show up, or does not answer</summary>
             <ol>
               <li>If the list is empty, the board is not in update mode: unplug every cable, hold <strong>BOOT</strong> (on the underside of the board, next to the <strong>MCU</strong> USB-C port) while you plug the computer into the MCU USB-C port, then let go.</li>
               <li>Use a USB cable that carries data (some cables only charge).</li>

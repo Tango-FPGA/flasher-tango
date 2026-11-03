@@ -51,10 +51,10 @@
     maxDownloadBytes: 4 * 1024 * 1024,
   });
 
-  /* Where "Get it from GitHub for me" reads the firmware bytes; {tag} is the release tag (YYYYMMDD). */
+  /* Where "Get it from GitHub for me" reads the firmware bytes; {tag} is the release tag (YYYYMMDD or YYYYMMDD-N). */
   const FIRMWARE_RAW_URL_TEMPLATE = "https://raw.githubusercontent.com/Tango-FPGA/firmware-tango/main/releases/firmware-tango_{tag}.bin";
 
-  /* The release asset's file name for a tag (YYYYMMDD). */
+  /* The release asset's file name for a tag (YYYYMMDD or YYYYMMDD-N). */
   function firmwareAssetName(tag) {
     return TANGO_RELEASES.assetNameTemplate.replace("{tag}", tag);
   }
@@ -378,7 +378,8 @@
   function parseLatestRelease(json) {
     if (!json || typeof json !== "object" || Array.isArray(json)) return null;
     const tag = json.tag_name;
-    if (typeof tag !== "string" || !/^\d{8}$/.test(tag)) return null;
+    /* a release tag: the date code YYYYMMDD, or YYYYMMDD-N (N = 2, 3, ...: a further release on the same day) */
+    if (typeof tag !== "string" || !/^\d{8}(?:-(?:[2-9]|[1-9]\d+))?$/.test(tag)) return null;
     const year = Number(tag.slice(0, 4));
     const month = Number(tag.slice(4, 6));
     const day = Number(tag.slice(6, 8));
