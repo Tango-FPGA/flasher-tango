@@ -1,6 +1,6 @@
 # flasher-tango -- the Tango FPGA firmware installer
 
-**Version 2026-11-03** (date code `20261103-3`)
+**Version 2026-11-15** (date code `20261115`)
 
 flasher-tango is a web page that installs the **Tango FPGA** firmware on the **BL616** microcontroller of the
 **Sipeed Tang Console 138K**. It runs in Chrome or Edge on a desktop or laptop computer and talks to the board over
@@ -17,8 +17,8 @@ The installer writes two files to the BL616's flash in one pass:
 
 1. **The Sipeed debugger file** (`bl616_fpga_partner_Console.bin`): Sipeed's own program for the board's USB
    debugger. It keeps the debugger working and starts the Tango firmware.
-2. **The Tango firmware file** (`firmware-tango_<datecode>.bin`): the firmware from a
-   [firmware-tango release](https://github.com/Tango-FPGA/firmware-tango/releases).
+2. **The Tango firmware file** (`firmware-tango_<datecode>.bin`): a firmware release from the
+   [`releases/` folder of firmware-tango](https://github.com/Tango-FPGA/firmware-tango/tree/main/releases).
 
 You can choose each file from your computer, or let the page download it with **Get it from Sipeed for me** and
 **Get it from GitHub for me**. Before anything is sent to the board, the page checks each file: the debugger file
@@ -39,8 +39,10 @@ files.
 - Opening the page loads only the page's own files from this site.
 - **Get it from Sipeed for me** downloads one file from Sipeed's server (`api.dl.sipeed.com`), and only when you
   click it.
-- **Get it from GitHub for me** asks GitHub for the latest firmware-tango release (`api.github.com`) and downloads
-  that release's firmware file (`raw.githubusercontent.com`), and only when you click it.
+- **Get it from GitHub for me** reads which firmware-tango release is the newest from its `releases/` folder
+  (`releases/latest.json` on `raw.githubusercontent.com`; while that file does not exist, GitHub's list of the
+  folder from `api.github.com`), then downloads that release's firmware file (`raw.githubusercontent.com`) and checks
+  its size and checksum, and only when you click it.
 - No other server is contacted. The page's content security policy allows only its own files and these three
   addresses. It sends no cookies, credentials or referrer with these downloads.
 

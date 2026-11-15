@@ -510,7 +510,7 @@
     },
     clear: () => session.clearFirmware(),
     download: () => {
-      log(`Asking GitHub for the latest Tango firmware release (${TANGO_RELEASES.apiUrl})`);
+      log(`Asking GitHub for the latest Tango firmware release (${TANGO_RELEASES.latestUrl}; if it is missing, ${TANGO_RELEASES.listingUrl})`);
       return fetchLatestFirmware({ fetchImpl });
     },
     onFailure: (result) => {
@@ -520,13 +520,14 @@
         elements.githubDirectLink.textContent = `Download ${result.release.assetName} (release ${result.release.tag}) from GitHub`;
       } else {
         elements.githubDirectLink.href = TANGO_RELEASES.pageUrl;
-        elements.githubDirectLink.textContent = "Open the Tango firmware releases page";
+        elements.githubDirectLink.textContent = "Open the Tango firmware releases folder";
       }
     },
     accept: async (result) => {
       latestRelease = result.release;
       await session.setFirmware(result.bytes, result.release.assetName, "github", result.release);
-      log(`Box 2: Tango firmware release ${result.release.tag}, downloaded from GitHub, ${result.bytes.length} bytes, SHA-256 ${result.check.sha256}`, "success");
+      const found = result.release.via === "listing" ? "the releases/ folder listing" : "releases/latest.json";
+      log(`Box 2: Tango firmware release ${result.release.tag} (found through ${found}), downloaded from GitHub, ${result.bytes.length} bytes, SHA-256 ${result.check.sha256}`, "success");
     },
   });
 

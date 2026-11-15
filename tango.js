@@ -38,13 +38,19 @@
     timeoutMs: 20000,
   });
 
-  /* The Tango firmware releases on GitHub; the page asks for the latest release's metadata only. */
+  /*
+   * The Tango firmware releases: every release's image is in the releases/ folder on main of the firmware
+   * repository, as firmware-tango_<tag>.bin ({tag}: YYYYMMDD or YYYYMMDD-N). releases/latest.json names the newest
+   * one ({ tag, file, size, sha256 }); while that file does not exist (HTTP 404), the newest image is found in the
+   * GitHub contents API listing of releases/ instead (size and git blob SHA-1 per file).
+   */
   const TANGO_RELEASES = Object.freeze({
-    apiUrl: "https://api.github.com/repos/Tango-FPGA/firmware-tango/releases/latest",
-    pageUrl: "https://github.com/Tango-FPGA/firmware-tango/releases",
-    tagUrlPrefix: "https://github.com/Tango-FPGA/firmware-tango/releases/tag/",
-    downloadUrlPrefix: "https://github.com/Tango-FPGA/firmware-tango/releases/download/",
-    assetNameTemplate: "firmware-tango_{tag}.bin",
+    latestUrl: "https://raw.githubusercontent.com/Tango-FPGA/firmware-tango/main/releases/latest.json",
+    listingUrl: "https://api.github.com/repos/Tango-FPGA/firmware-tango/contents/releases?ref=main",
+    pageUrl: "https://github.com/Tango-FPGA/firmware-tango/tree/main/releases",
+    notesUrlPrefix: "https://github.com/Tango-FPGA/firmware-tango/tree/",
+    fileUrlPrefix: "https://github.com/Tango-FPGA/firmware-tango/raw/main/releases/",
+    fileNameTemplate: "firmware-tango_{tag}.bin",
     timeoutMs: 10000,
     maxResponseChars: 1024 * 1024,
     downloadTimeoutMs: 20000,
@@ -54,9 +60,9 @@
   /* Where "Get it from GitHub for me" reads the firmware bytes; {tag} is the release tag (YYYYMMDD or YYYYMMDD-N). */
   const FIRMWARE_RAW_URL_TEMPLATE = "https://raw.githubusercontent.com/Tango-FPGA/firmware-tango/main/releases/firmware-tango_{tag}.bin";
 
-  /* The release asset's file name for a tag (YYYYMMDD or YYYYMMDD-N). */
+  /* A release's image file name for a tag (YYYYMMDD or YYYYMMDD-N). */
   function firmwareAssetName(tag) {
-    return TANGO_RELEASES.assetNameTemplate.replace("{tag}", tag);
+    return TANGO_RELEASES.fileNameTemplate.replace("{tag}", tag);
   }
 
   /*
@@ -101,6 +107,18 @@
     const subtle = globalThis.crypto && globalThis.crypto.subtle;
     if (!subtle) throw new Error("This browser cannot compute SHA-256. Open the page from its secure (https) address.");
     return bytesToHex(new Uint8Array(await subtle.digest("SHA-256", toBytes(data))));
+  }
+
+  /* git's object id of a file's bytes: SHA-1 of "blob <length>\0" followed by the bytes. */
+  async function gitBlobSha(data) {
+    const subtle = globalThis.crypto && globalThis.crypto.subtle;
+    if (!subtle) throw new Error("This browser cannot compute SHA-1. Open the page from its secure (https) address.");
+    const bytes = toBytes(data);
+    const header = Array.from(`blob ${bytes.length}\0`, (ch) => ch.charCodeAt(0));
+    const object = new Uint8Array(header.length + bytes.length);
+    object.set(header, 0);
+    object.set(bytes, header.length);
+    return bytesToHex(new Uint8Array(await subtle.digest("SHA-1", object)));
   }
 
   function formatBytes(n) {
@@ -370,54 +388,100 @@
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
   }
 
-  /*
-   * Validates a GitHub "latest release" object. Returns
-   * { tag, date: "YYYY-MM-DD", display, assetName, downloadUrl, notesUrl, size, digest } or null. The asset's
-   * digest ("sha256:<64 lowercase hex>") is required.
-   */
-  function parseLatestRelease(json) {
-    if (!json || typeof json !== "object" || Array.isArray(json)) return null;
-    const tag = json.tag_name;
-    /* a release tag: the date code YYYYMMDD, or YYYYMMDD-N (N = 2, 3, ...: a further release on the same day) */
-    if (typeof tag !== "string" || !/^\d{8}(?:-(?:[2-9]|[1-9]\d+))?$/.test(tag)) return null;
+  /* A release tag: the date code YYYYMMDD (a real date), or YYYYMMDD-N (N = 2, 3, ...: a further release on the same day). */
+  const TAG_PATTERN = /^\d{8}(?:-(?:[2-9]|[1-9]\d+))?$/;
+
+  /* [YYYYMMDD, N] of a valid tag (N = 1 without a suffix), or null. Releases sort by it. */
+  function tagKey(tag) {
+    if (typeof tag !== "string" || !TAG_PATTERN.test(tag)) return null;
     const year = Number(tag.slice(0, 4));
     const month = Number(tag.slice(4, 6));
     const day = Number(tag.slice(6, 8));
     if (!isValidDate(year, month, day)) return null;
-    if (json.draft === true || json.prerelease === true) return null;
-    const notesUrl = json.html_url;
-    if (notesUrl !== `${TANGO_RELEASES.tagUrlPrefix}${tag}`) return null;
-    if (!Array.isArray(json.assets)) return null;
-    const assetName = firmwareAssetName(tag);
-    const matches = json.assets.filter((asset) => asset && asset.name === assetName);
-    if (matches.length !== 1) return null;
-    const asset = matches[0];
-    const downloadUrl = asset.browser_download_url;
-    if (typeof downloadUrl !== "string" || !downloadUrl.startsWith(TANGO_RELEASES.downloadUrlPrefix)) return null;
-    if (downloadUrl !== `${TANGO_RELEASES.downloadUrlPrefix}${tag}/${assetName}`) return null;
-    const size = Number.isSafeInteger(asset.size) && asset.size > 0 ? asset.size : null;
-    const digestMatch = typeof asset.digest === "string" ? /^sha256:([0-9a-f]{64})$/.exec(asset.digest) : null;
-    if (!digestMatch) return null;
+    return [Number(tag.slice(0, 8)), tag.length > 8 ? Number(tag.slice(9)) : 1];
+  }
+
+  /* Negative, zero or positive as tag a is older than, the same as, or newer than tag b (both valid). */
+  function compareTags(a, b) {
+    const ka = tagKey(a);
+    const kb = tagKey(b);
+    return ka[0] - kb[0] || ka[1] - kb[1];
+  }
+
+  /*
+   * The release object for a valid tag: { tag, date: "YYYY-MM-DD", display, assetName, rawUrl, downloadUrl, notesUrl,
+   * size, digest (SHA-256, or null), gitSha (git blob SHA-1, or null), via ("latest.json" | "listing") }.
+   */
+  function makeRelease(tag, size, digest, gitSha, via) {
     const date = `${tag.slice(0, 4)}-${tag.slice(4, 6)}-${tag.slice(6, 8)}`;
+    const assetName = firmwareAssetName(tag);
     return {
       tag,
       date,
       display: `version ${date} (release ${tag})`,
       assetName,
-      downloadUrl,
-      notesUrl,
+      rawUrl: FIRMWARE_RAW_URL_TEMPLATE.replace("{tag}", tag),
+      downloadUrl: `${TANGO_RELEASES.fileUrlPrefix}${assetName}`,
+      notesUrl: `${TANGO_RELEASES.notesUrlPrefix}${tag}`,
       size,
-      digest: digestMatch[1],
+      digest,
+      gitSha,
+      via,
     };
   }
 
+  function validSize(size) {
+    return Number.isSafeInteger(size) && size > 0 && size <= TANGO_RELEASES.maxDownloadBytes;
+  }
+
   /*
-   * One GET of TANGO_RELEASES.apiUrl. Returns { ok: true, release } or { ok: false, kind } with kind one of
-   * "network" | "http" | "timeout" | "data". options.fetchImpl is required.
+   * Validates releases/latest.json: { "tag": "<YYYYMMDD[-N]>", "file": "firmware-tango_<tag>.bin", "size": <bytes>,
+   * "sha256": "<64 lowercase hex>" } (other keys are ignored). Returns a release object or null.
    */
-  async function fetchLatestRelease(options) {
-    const fetchImpl = options.fetchImpl;
-    const timeoutMs = options.timeoutMs || TANGO_RELEASES.timeoutMs;
+  function parseLatestManifest(json) {
+    if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+    const tag = json.tag;
+    if (!tagKey(tag)) return null;
+    if (json.file !== firmwareAssetName(tag)) return null;
+    if (!validSize(json.size)) return null;
+    if (typeof json.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(json.sha256)) return null;
+    return makeRelease(tag, json.size, json.sha256, null, "latest.json");
+  }
+
+  /*
+   * Validates the GitHub contents API listing of releases/ (an array of entries) and picks the newest release image:
+   * entries named firmware-tango_<tag>.bin with a valid tag, ordered by date code, then by the same-day number.
+   * Other names are ignored. A firmware entry must be a file at releases/<name> with a size up to the download cap
+   * and a 40-hex git blob SHA-1. Returns a release object or null (also when there is no firmware entry).
+   */
+  function parseReleaseListing(json) {
+    if (!Array.isArray(json)) return null;
+    let newest = null;
+    for (const entry of json) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+      const match = typeof entry.name === "string" ? /^firmware-tango_(.+)\.bin$/.exec(entry.name) : null;
+      if (!match || !tagKey(match[1]) || entry.name !== firmwareAssetName(match[1])) continue;
+      if (entry.type !== "file" || entry.path !== `releases/${entry.name}`) return null;
+      if (!validSize(entry.size)) return null;
+      if (typeof entry.sha !== "string" || !/^[0-9a-f]{40}$/.test(entry.sha)) return null;
+      if (!newest || compareTags(match[1], newest.tag) > 0) newest = { tag: match[1], size: entry.size, sha: entry.sha };
+    }
+    return newest ? makeRelease(newest.tag, newest.size, null, newest.sha, "listing") : null;
+  }
+
+  /* True when the bytes' hashes match every hash the release names (at least one). */
+  function matchesRelease(release, sha256, gitSha) {
+    if (!release || !(release.digest || release.gitSha)) return false;
+    if (release.digest && release.digest !== sha256) return false;
+    if (release.gitSha && release.gitSha !== gitSha) return false;
+    return true;
+  }
+
+  /*
+   * One GET of a JSON document, with a timeout and a size cap. Returns { ok: true, json } or
+   * { ok: false, kind, status? }, kind one of "network" | "http" | "timeout" | "data".
+   */
+  async function fetchJson(fetchImpl, url, timeoutMs, headers) {
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
@@ -425,26 +489,24 @@
       controller.abort();
     }, timeoutMs);
     try {
-      const response = await fetchImpl(TANGO_RELEASES.apiUrl, {
+      const init = {
         method: "GET",
         mode: "cors",
         credentials: "omit",
         cache: "no-store",
         referrerPolicy: "no-referrer",
-        headers: { Accept: "application/vnd.github+json" },
         signal: controller.signal,
-      });
+      };
+      if (headers) init.headers = headers;
+      const response = await fetchImpl(url, init);
       if (!response.ok) return { ok: false, kind: "http", status: response.status };
       const text = await response.text();
       if (text.length > TANGO_RELEASES.maxResponseChars) return { ok: false, kind: "data" };
-      let json;
       try {
-        json = JSON.parse(text);
+        return { ok: true, json: JSON.parse(text) };
       } catch (_) {
         return { ok: false, kind: "data" };
       }
-      const release = parseLatestRelease(json);
-      return release ? { ok: true, release } : { ok: false, kind: "data" };
     } catch (_) {
       return { ok: false, kind: timedOut ? "timeout" : "network" };
     } finally {
@@ -453,12 +515,35 @@
   }
 
   /*
+   * Finds the latest release: one GET of TANGO_RELEASES.latestUrl; only if that answers HTTP 404 (no latest.json
+   * yet), one GET of TANGO_RELEASES.listingUrl. Any other failure of latest.json is final. Returns
+   * { ok: true, release } or { ok: false, kind, status?, source } with kind one of "network" | "http" | "timeout" |
+   * "data" and source "latest.json" | "listing". options.fetchImpl is required.
+   */
+  async function fetchLatestRelease(options) {
+    const fetchImpl = options.fetchImpl;
+    const timeoutMs = options.timeoutMs || TANGO_RELEASES.timeoutMs;
+    const latest = await fetchJson(fetchImpl, TANGO_RELEASES.latestUrl, timeoutMs);
+    if (latest.ok) {
+      const release = parseLatestManifest(latest.json);
+      return release ? { ok: true, release } : { ok: false, kind: "data", source: "latest.json" };
+    }
+    if (!(latest.kind === "http" && latest.status === 404)) return { ...latest, source: "latest.json" };
+    const listing = await fetchJson(fetchImpl, TANGO_RELEASES.listingUrl, timeoutMs, { Accept: "application/vnd.github+json" });
+    if (!listing.ok) return { ...listing, source: "listing" };
+    const release = parseReleaseListing(listing.json);
+    return release ? { ok: true, release } : { ok: false, kind: "data", source: "listing" };
+  }
+
+  /*
    * Compares a passed box-2 check with the latest release. Returns null (nothing to say) or
    * { kind: "latest" | "newer-available", text }. Never affects whether Install is allowed.
    */
   function compareWithLatest(firmwareCheck, release) {
-    if (!firmwareCheck || !firmwareCheck.ok || !release || !release.digest) return null;
-    if (firmwareCheck.sha256 === release.digest) return { kind: "latest", text: "This is the latest Tango firmware." };
+    if (!firmwareCheck || !firmwareCheck.ok || !release || !(release.digest || release.gitSha)) return null;
+    if (matchesRelease(release, firmwareCheck.sha256, firmwareCheck.gitSha)) {
+      return { kind: "latest", text: "This is the latest Tango firmware." };
+    }
     if (firmwareCheck.version && firmwareCheck.version.date < release.date) {
       return {
         kind: "newer-available",
@@ -469,11 +554,11 @@
   }
 
   /*
-   * "Get it from GitHub for me": the latest release's metadata from the GitHub API, then the firmware bytes
-   * from FIRMWARE_RAW_URL_TEMPLATE (release attachments cannot be read cross-origin). Accepted only when the
-   * bytes' SHA-256 equals the release asset's digest and checkFirmware passes.
-   * Returns { ok: true, bytes, check, release } or { ok: false, kind, detail, release (null unless the API
-   * answered) }, kind one of "api-network" | "api-http" | "api-timeout" | "api-data" | "network" | "http" |
+   * "Get it from GitHub for me": the latest release (fetchLatestRelease), then the firmware bytes from
+   * FIRMWARE_RAW_URL_TEMPLATE. Accepted only when the bytes have exactly the release's size, match its hashes
+   * (SHA-256 from latest.json, or the git blob SHA-1 from the listing) and pass checkFirmware.
+   * Returns { ok: true, bytes, check, release } or { ok: false, kind, detail, release (null unless the latest release
+   * was found) }, kind one of "api-network" | "api-http" | "api-timeout" | "api-data" | "network" | "http" |
    * "timeout" | "size" | "digest" | "check".
    */
   async function fetchLatestFirmware(options) {
@@ -483,7 +568,10 @@
       const detail = {
         network: "The browser could not reach GitHub, or blocked the request.",
         timeout: `GitHub did not answer within ${Math.round((options.apiTimeoutMs || TANGO_RELEASES.timeoutMs) / 1000)} seconds.`,
-        data: "GitHub's answer about the latest Tango firmware release was not in the expected form.",
+        data:
+          api.source === "latest.json"
+            ? "The description of the latest Tango firmware release (releases/latest.json) was not in the expected form."
+            : "GitHub's list of the Tango firmware releases was not in the expected form.",
         http:
           api.status === 403 || api.status === 429
             ? `GitHub refused the request (HTTP ${api.status}): it limits how often one computer may ask. Try again later.`
@@ -494,7 +582,7 @@
     const release = api.release;
     const download = await downloadBytes({
       fetchImpl,
-      url: FIRMWARE_RAW_URL_TEMPLATE.replace("{tag}", release.tag),
+      url: release.rawUrl,
       timeoutMs: options.timeoutMs || TANGO_RELEASES.downloadTimeoutMs,
       maxBytes: TANGO_RELEASES.maxDownloadBytes,
       server: "GitHub",
@@ -507,12 +595,22 @@
       return { ok: false, kind: download.kind, detail, release };
     }
     const bytes = download.bytes;
+    if (bytes.length !== release.size) {
+      return {
+        ok: false,
+        kind: "size",
+        detail: `The downloaded file has ${formatBytes(bytes.length)}, but release ${release.tag} has ${formatBytes(release.size)}.`,
+        release,
+      };
+    }
     const sha256 = await sha256Hex(bytes);
-    if (sha256 !== release.digest) {
+    const gitSha = await gitBlobSha(bytes);
+    if (!matchesRelease(release, sha256, gitSha)) {
       return { ok: false, kind: "digest", detail: `The downloaded file does not match release ${release.tag} (SHA-256 ${sha256}).`, release };
     }
     const check = checkFirmware(bytes, sha256);
     if (!check.ok) return { ok: false, kind: "check", detail: `The downloaded file is not valid Tango firmware. ${check.errors.join(" ")}`, release };
+    check.gitSha = gitSha;
     return { ok: true, bytes, check, release };
   }
 
@@ -537,27 +635,40 @@
       }
       this.acknowledged = false;
       this.debugger = { name, bytes, source, check };
-      if (this.firmware) this.firmware.check = checkFirmware(this.firmware.bytes, this.firmware.check.sha256, sha256);
+      if (this.firmware) this.recheckFirmware(sha256);
       return this.debugger.check;
     }
 
-    /* source: "file" (picked) or "github" (fetched by fetchLatestFirmware; must match release.digest). */
+    /*
+     * source: "file" (picked) or "github" (fetched by fetchLatestFirmware; must match the release's hashes).
+     * The check also carries the file's git blob SHA-1 (gitSha), which compareWithLatest uses for a release found in
+     * the listing.
+     */
     async setFirmware(data, name = "", source = "file", release = null) {
       const bytes = toBytes(data);
       const sha256 = await sha256Hex(bytes);
+      const gitSha = await gitBlobSha(bytes);
       const check = checkFirmware(bytes, sha256, this.debugger ? this.debugger.check.sha256 : null);
-      if (source === "github" && !(check.ok && release && release.digest === sha256)) {
+      check.gitSha = gitSha;
+      if (source === "github" && !(check.ok && release && release.size === bytes.length && matchesRelease(release, sha256, gitSha))) {
         throw new Error("A file downloaded from GitHub must match the latest release.");
       }
       this.firmware = { name, bytes, source, release: source === "github" ? release : null, check };
       return this.firmware.check;
     }
 
+    /* Runs box 2's checks again against a new box-1 hash (or none). */
+    recheckFirmware(debuggerSha256) {
+      const gitSha = this.firmware.check.gitSha;
+      this.firmware.check = checkFirmware(this.firmware.bytes, this.firmware.check.sha256, debuggerSha256);
+      this.firmware.check.gitSha = gitSha;
+    }
+
     /* Empties box 1 (file, check and acknowledgement). */
     clearDebugger() {
       this.debugger = null;
       this.acknowledged = false;
-      if (this.firmware) this.firmware.check = checkFirmware(this.firmware.bytes, this.firmware.check.sha256, null);
+      if (this.firmware) this.recheckFirmware(null);
     }
 
     /* Empties box 2. */
@@ -600,7 +711,11 @@
     SIPEED_DEBUGGER,
     fetchSipeedDebugger,
     TANGO_RELEASES,
-    parseLatestRelease,
+    tagKey,
+    compareTags,
+    parseLatestManifest,
+    parseReleaseListing,
+    matchesRelease,
     fetchLatestRelease,
     fetchLatestFirmware,
     FIRMWARE_RAW_URL_TEMPLATE,
@@ -608,6 +723,7 @@
     compareWithLatest,
     crc32,
     sha256Hex,
+    gitBlobSha,
     readBootHeader,
     checkDebugger,
     checkFirmware,
